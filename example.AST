@@ -1,0 +1,67 @@
+SurfaceExample {
+  stageFetch :=
+    Stage.mk
+      (name := "Fetch")
+      (inputs :=
+        [ Handshake.mk
+            (valid := "f_in_v")
+            (ready := "f_in_r")
+            (dir   := in)
+            (data  := "in_req") ])
+      (outputs :=
+        [ Handshake.mk
+            (valid := "f_out_v")
+            (ready := "f_out_r")
+            (dir   := out)
+            (data  := "out_resp") ])
+      (dataflow :=
+        Cmd.seq
+          (Cmd.letA "tmp" (Expr.app "hash" (Expr.var "in_req")))
+          (Cmd.write "f_out_v" (Expr.var "tmp")))
+      (security :=
+        Sec.mk
+          (privs := [])
+          (obs   := [ Observe.reg 0 ])),
+
+  stageExec :=
+    Stage.mk
+      (name := "Exec")
+      (inputs :=
+        [ Handshake.mk
+            (valid := "e_in_v")
+            (ready := "e_in_r")
+            (dir   := in)
+            (data  := "e_req") ])
+      (outputs :=
+        [ Handshake.mk
+            (valid := "e_out_v")
+            (ready := "e_out_r")
+            (dir   := out)
+            (data  := "e_resp") ])
+      (dataflow :=
+        Cmd.seq
+          (Cmd.letA "p"   (Expr.app "fst" (Expr.var "e_req")))
+          (Cmd.seq
+            (Cmd.letA "q"   (Expr.app "snd" (Expr.var "e_req")))
+            (Cmd.seq
+              (Cmd.letA "res"
+                (Expr.app2 "encrypt"
+                  (Expr.var "p")
+                  (Expr.var "q")))
+              (Cmd.write "e_out_v" (Expr.var "res")))))
+      (security :=
+        Sec.mk
+          (privs := [ Endorse.mem 3 ])
+          (obs   := [ Hidden.reg 1 ])),
+
+  pipe :=
+    Pipeline.mk
+      (name := "EndToEnd")
+      (stages :=
+        [ ("sFetch", "Fetch")
+        , ("sExec",  "Exec") ])
+      (connects :=
+        [ Connect.mk
+            (src := ("sFetch", 0))
+            (dst := ("sExec",  0)) ])
+}
